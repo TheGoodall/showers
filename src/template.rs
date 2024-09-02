@@ -9,12 +9,12 @@ pub struct Template {
     metadata: Option<HashMap<String, String>>,
     description: Option<String>,
     mappings: Option<Mapping>,
-    parameters: Option<HashMap<String, Parameter>>,
+    parameters: Option<HashMap<String, Parameter<Box<dyn Value>>>>,
     resources: HashMap<String, Resource>,
     outputs: Option<HashMap<String, Output>>,
 }
 
-#[derive(Deserialize, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 #[serde(rename_all = "PascalCase")]
 #[serde(tag = "Type")]
 pub enum Resource {
@@ -38,7 +38,7 @@ pub enum Resource {
     SecurityGroup(ResourceContainer<SecurityGroup>),
 }
 
-#[derive(Deserialize, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 #[serde(rename_all = "PascalCase")]
 pub struct ResourceContainer<T> {
     properties: T,
@@ -57,26 +57,61 @@ pub enum MappingEntry {
     List(Vec<String>),
     Mapping(Mapping),
 }
+#[typetag::serde(tag = "Type")]
+trait Value: core::fmt::Debug + std::cmp::Eq {}
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
-#[serde(untagged)]
-pub enum Value {
-    String(String),
-    Number(i64),
-    #[serde(rename_all = "PascalCase")]
-    Ref {
-        r#ref: String,
-    },
-    GetAtt {
-        #[serde(rename = "Fn::GetAtt")]
-        get_att: Vec<String>,
-    },
-    Join {
-        #[serde(rename = "Fn::Join")]
-        join: (String, Vec<Value>),
-    },
-    Sub {
-        #[serde(rename = "Fn::Sub")]
-        sub: String,
-    },
+#[serde(rename_all = "PascalCase")]
+struct Ref {
+    r#ref: String,
 }
+#[typetag::serde]
+impl Value for Ref {}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+#[serde(rename_all = "PascalCase")]
+struct GetAtt {
+    get_att: Vec<String>,
+}
+#[typetag::serde]
+impl Value for GetAtt {}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+struct Join {
+    #[serde(rename = "Fn::Join")]
+    join: (String, Vec<Box<dyn Value>>),
+}
+#[typetag::serde]
+impl Value for Join {}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+struct Sub {
+    #[serde(rename = "Fn::Sub")]
+    sub: String,
+}
+#[typetag::serde]
+impl Value for Sub {}
+
+#[typetag::serde]
+impl Value for String {}
+#[typetag::serde]
+impl Value for i64 {}
+
+// #[typetag::serde]
+// impl Value for Box<dyn Value + '_> {}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+pub struct Parameter<T: Value> {
+    allowed_values: Vec<Box<T>>,
+    default: Box<T>,
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+pub struct Output {}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+pub struct Ec2 {}
+
+pub struct Vpc {}
+
+pub struct SecurityGroup {}
